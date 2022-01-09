@@ -15,3 +15,4 @@ Dallas temp sensor
 SR-04T for water level in a water tank
 
 Switching low voltage only with UniPi relays, controls big 230V 16A power relays.
+
