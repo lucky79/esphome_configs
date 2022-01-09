@@ -183,7 +183,7 @@ switch:
                 id: cerpadlo_ph_minus
                 target: 10000
             - wait_until: # Wait until endstop reached
-                lambda: 'return (id(cerpadlo_chlor).current_position == 10000 );'
+                lambda: 'return (id(cerpadlo_ph_minus).current_position == 10000 );'
             - logger.log: "Stepper $(name) reached its target 10000"
             - switch.turn_off: cerpadlo_ph_minus_switch
   
