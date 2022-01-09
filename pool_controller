@@ -1,0 +1,382 @@
+esphome:
+  name: strojovna
+  platform: ESP32
+  board: mhetesp32minikit
+
+wifi:
+  ssid: "xxxxxxxxxxxxxxxxxxx"
+  password: "xxxxxxxxxxxxxxxxxxx"
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Sklep Fallback Hotspot"
+    password: "xxxxxxxxxxxxxxxxxxxxx
+
+captive_portal:
+
+# Enable logging
+logger:
+ level: DEBUG
+
+# Enable Home Assistant API
+api:
+ password: xxxxxxxxxxxxxxxxxxxxx
+
+# services:
+#    - service: cerpadlo_chlor
+#      variables:
+#        target: int
+#      then:
+#        - stepper.set_target:
+#            id: cerpadlo_chlor
+#            target: !lambda 'return target;'
+ota:
+ password: xxxxxxxxxxxxx
+
+time:
+  - platform: homeassistant
+    id: homeassistant_time
+  - platform: homeassistant
+    id: filtrace_start_sched
+    on_time:
+        seconds: 0
+        minutes: 0
+        hours: 8
+        then:
+          if:
+            condition: 
+              - time.has_time:
+              - switch.is_on: pool_pump_auto
+            then:
+              - switch.turn_on: cerpadlo_bazen
+              - switch.turn_on: uv_lampa_bazen
+              - logger.log: "Časovač - filtrace zapnuta"
+  - platform: homeassistant
+    id: filtrace_stop_sched
+    on_time:
+        seconds: 0
+        minutes: 0
+        hours: 20
+        then:
+          if:
+            condition: 
+              - time.has_time:
+              - switch.is_on: pool_pump_auto
+            then:
+              - switch.turn_off: cerpadlo_bazen
+              - switch.turn_off: uv_lampa_bazen
+              - logger.log: "Časovač - filtrace vypnuta"
+  - platform: homeassistant
+    id: filtrace_winter
+    on_time:
+        seconds: 0
+        minutes: /5
+        then:
+          if:
+            condition: 
+              - time.has_time:
+              - switch.is_on: pool_pump_winter
+              - sensor.in_range:
+                  id: teplota_bazen
+                  below: 0.5
+            then:
+              - switch.turn_on: cerpadlo_bazen
+              - logger.log: "Teplota vody pod limitem, zapínám čerpadlo na 7min"
+              - delay: 420s
+              - switch.turn_off: cerpadlo_bazen
+i2c:
+  scl: GPIO21
+  sda: GPIO17
+
+dallas:
+  pin: GPIO5
+
+mcp23008:
+  - id: 'mcp23008_hub'
+    address: 0x20
+
+switch:
+  - platform: gpio
+    id: cerpadlo_bazen
+    name: "Čerpadlo Bazén"
+    pin:
+      mcp23xxx: mcp23008_hub
+      # Use pin number 0
+      number: 1
+      mode: OUTPUT
+      inverted: False
+    on_turn_off:
+     if:
+      condition:
+       switch.is_on: uv_lampa_bazen
+      then:
+      - switch.turn_off: uv_lampa_bazen
+  - platform: gpio
+    name: "UV Lampa Bazén"
+    id: uv_lampa_bazen
+    pin:
+      mcp23xxx: mcp23008_hub
+      # Use pin number 0
+      number: 0
+      mode: OUTPUT
+      inverted: False
+    on_turn_on:
+      if:
+        condition:
+         switch.is_off: cerpadlo_bazen
+        then:
+        - switch.turn_on: cerpadlo_bazen
+  - platform: gpio
+    id: svetlo_bazen
+    name: "Osvětlení Bazén"
+    pin:
+      mcp23xxx: mcp23008_hub
+      # Use pin number 0
+      number: 2
+      mode: OUTPUT
+      inverted: False
+  - platform: gpio
+    id: cerpadlo_destovka
+    name: "Čerpadlo Dešťovka"
+    pin:
+      mcp23xxx: mcp23008_hub
+      # Use pin number 0
+      number: 3
+      mode: OUTPUT
+      inverted: False
+  - platform: gpio
+    id: svetlo_zahrada
+    name: "Osvětlení Zahrada"
+    pin:
+      mcp23xxx: mcp23008_hub
+      number: 4
+      mode: OUTPUT
+      inverted: false
+  - platform: template
+    name: "Chlor - Dávka"
+    id: cerpadlo_chlor_switch
+    optimistic: true
+    turn_on_action:
+            - logger.log: "Setting $(name) stepper position to 0"
+            - stepper.report_position:
+                id: cerpadlo_chlor
+                position: 0
+            - logger.log: "Setting $(name) stepper position to 10000"
+            - stepper.set_target:
+                id: cerpadlo_chlor
+                target: 10000
+            - wait_until: # Wait until endstop reached
+                lambda: 'return (id(cerpadlo_chlor).current_position == 10000 );'
+            - logger.log: "Stepper $(name) reached its target 10000"
+            - switch.turn_off: cerpadlo_chlor_switch
+  - platform: template
+    name: "pH Minus - Dávka"
+    id: cerpadlo_ph_minus_switch
+    optimistic: true
+    turn_on_action:
+            - logger.log: "Setting $(name) stepper position to 0"
+            - stepper.report_position:
+                id: cerpadlo_ph_minus
+                position: 0
+            - logger.log: "Setting $(name) stepper position to 10000"
+            - stepper.set_target:
+                id: cerpadlo_ph_minus
+                target: 10000
+            - wait_until: # Wait until endstop reached
+                lambda: 'return (id(cerpadlo_chlor).current_position == 10000 );'
+            - logger.log: "Stepper $(name) reached its target 10000"
+            - switch.turn_off: cerpadlo_ph_minus_switch
+  
+  - platform: template
+    name: "Chlor - Automat"
+    id: chlor_autodosing
+    optimistic: true
+  - platform: template
+    name: "Filtrace - Zimní provoz"
+    id: pool_pump_winter
+    optimistic: true
+  - platform: template
+    name: "Filtrace - Automat"
+    id: pool_pump_auto
+    optimistic: true
+  - platform: template
+    name: "pH - Automat"
+    id: ph_minus_autodosing
+    optimistic: true
+  - platform: template
+    name: "Filtrace"
+    id: switch_filtrace
+    on_turn_on:
+      - switch.turn_on: cerpadlo_bazen
+      - switch.turn_on: uv_lampa_bazen
+    on_turn_off:
+      - switch.turn_off: cerpadlo_bazen
+      - switch.turn_off: uv_lampa_bazen
+    optimistic: true
+  - platform: restart
+    name: Restart Strojovna
+    
+sensor:
+ - platform: dht
+   pin: 
+    number: GPIO34
+    #mode: INPUT_PULLUP
+   model: DHT22
+   temperature:
+    name: "Teplota Strojovna"
+   humidity:
+    name: "Vlhkost Strojovna"
+   update_interval: 600s
+ - platform: ultrasonic
+   trigger_pin: GPIO23
+   echo_pin: GPIO35
+   id: nadrz_bazen_sr04
+   name: "Nadrz bazen SR04"
+   update_interval: 5s
+   accuracy_decimals: 1
+   filters:
+    #- offset: -0.15
+    #- lambda: return x*100;
+    - multiply: 100
+    - sliding_window_moving_average:
+        window_size: 10
+        send_every: 5
+   unit_of_measurement: "cm"
+ - platform: template
+   name: "Nadrz Bazen"
+   id: nadrz_bazen_napln
+   accuracy_decimals: 0
+   unit_of_measurement: "%"
+   icon: "mdi:water"
+   lambda: |-
+      if (id(nadrz_bazen_sr04).state > 160 ) {
+        return 999;
+      } else if (id(nadrz_bazen_sr04).state > 105) {
+        return 0;
+      } else {
+        return (105 - (int) id(nadrz_bazen_sr04).state);
+      }
+   update_interval: 30s
+ - platform: dallas
+   address: 0xF400000D57BE9B28
+   id: teplota_bazen
+   name: "Teplota Bazén"
+ - platform: ezo
+   id: ph_ezo
+   name: pH
+   address: 99
+   unit_of_measurement: "pH"
+   accuracy_decimals: 2
+   update_interval: 300s
+ - platform: ezo
+   id: orp_ezo
+   name: ORP
+   address: 98
+   unit_of_measurement: "mV"
+   update_interval: 300s
+ - platform: homeassistant   
+   id: hladina_chloru
+   entity_id: input_number.stepper_control_chlor
+ - platform: homeassistant   
+   id: hladina_ph
+   entity_id: input_number.stepper_control_ph
+ - platform: homeassistant   
+   id: filtrace_start
+   entity_id: input_datetime.filtrace_start
+ - platform: homeassistant   
+   id: filtrace_stop
+   entity_id: input_datetime.filtrace_stop
+
+binary_sensor:
+  - platform: template
+    name: Málo Chloru
+    id: orp_low
+    lambda: |-
+      if (id(orp_ezo).state < id(hladina_chloru).state ) {
+        return true;
+      } else {
+        return false;
+      }
+  - platform: template
+    name: Vysoké pH
+    id: ph_high
+    lambda: |-
+      if (id(ph_ezo).state > id(hladina_ph).state ) {
+        return true;
+      } else {
+        return false;
+      }
+#  - platform: template
+#    name: Čerpadlo Chlor ON
+#    id: cerpadlo_chlor_on
+#    lambda: |-
+#      if (id(cerpadlo_chlor).target_position = id(cerpadlo_chlor).current_position) {
+#        return false;
+#      } else {
+#        return true;
+#      }
+
+interval:
+  - interval: 15min
+    then:
+        if:
+          condition:
+            - switch.is_on: chlor_autodosing
+            - binary_sensor.is_on: orp_low
+            - switch.is_on: cerpadlo_bazen
+            - switch.is_off: cerpadlo_ph_minus_switch
+          then:
+            - switch.toggle: cerpadlo_chlor_switch
+  - interval: 20min
+    then:
+        if:
+          condition:
+            - switch.is_on: ph_minus_autodosing
+            - binary_sensor.is_on: ph_high
+            - switch.is_on: cerpadlo_bazen
+          then:
+            - switch.toggle: cerpadlo_ph_minus_switch
+
+#script:
+# - id: script_chlor_dosing
+#   then:
+#       condition:
+#       # Same syntax for is_off
+#       switch.is_on: chlor_autodosing
+#       binary_sensor.is_on: orp_low
+#      then:
+#      - switch.turn_on: cerpadlo_chlor_switch
+
+#output:
+#  - platform: ledc
+#    pin: GPIO21
+#    frequency: 100 Hz
+#    id: light_bazen
+    
+stepper:
+  - platform: a4988
+    id: cerpadlo_chlor
+    step_pin: GPIO26
+    dir_pin: GPIO18
+    max_speed: 250 steps/s
+    sleep_pin:
+     number: GPIO22
+     inverted: True
+    acceleration: inf
+    deceleration: inf
+
+  - platform: a4988
+    id: cerpadlo_ph_minus
+    step_pin: GPIO27
+    dir_pin: GPIO25
+    max_speed: 500 steps/s
+    sleep_pin:
+     number: GPIO32
+     inverted: True
+    acceleration: inf
+    deceleration: inf
+
+#light:
+#  - platform: monochromatic
+#    output: light_bazen
+#    name: "Osvetleni Bazen"
