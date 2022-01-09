@@ -334,6 +334,7 @@ interval:
             - switch.is_on: ph_minus_autodosing
             - binary_sensor.is_on: ph_high
             - switch.is_on: cerpadlo_bazen
+            - switch.is_off: cerpadlo_chlor_switch
           then:
             - switch.toggle: cerpadlo_ph_minus_switch
 
