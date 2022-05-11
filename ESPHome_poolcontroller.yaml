@@ -63,6 +63,17 @@ time:
               - time.has_time:
               - switch.is_on: pool_pump_auto
             then:
+              - if:
+                  condition:
+                    or:
+                    - switch.is_on: cerpadlo_chlor_switch
+                    - switch.is_on: cerpadlo_ph_minus_switch
+                  then:
+                    - delay: 60s
+                    - homeassistant.service:
+                        service: notify.mobile_app
+                        data:
+                          message: 'Dávkovací čerpadlo stále běží'
               - switch.turn_off: cerpadlo_bazen
               - switch.turn_off: uv_lampa_bazen
               - logger.log: "Časovač - filtrace vypnuta"
@@ -108,9 +119,9 @@ switch:
     on_turn_off:
      if:
       condition:
-       switch.is_on: uv_lampa_bazen
+        - switch.is_on: uv_lampa_bazen
       then:
-      - switch.turn_off: uv_lampa_bazen
+        - switch.turn_off: uv_lampa_bazen
   - platform: gpio
     name: "UV Lampa Bazén"
     id: uv_lampa_bazen
@@ -168,6 +179,10 @@ switch:
             - wait_until: # Wait until endstop reached
                 lambda: 'return (id(cerpadlo_chlor).current_position == 10000 );'
             - logger.log: "Stepper $(name) reached its target 10000"
+            - homeassistant.service:
+                        service: notify.mobile_app_lukas_x
+                        data:
+                          message: 'Dávka Chloru'
             - switch.turn_off: cerpadlo_chlor_switch
   - platform: template
     name: "pH Minus - Dávka"
@@ -185,6 +200,10 @@ switch:
             - wait_until: # Wait until endstop reached
                 lambda: 'return (id(cerpadlo_ph_minus).current_position == 10000 );'
             - logger.log: "Stepper $(name) reached its target 10000"
+            - homeassistant.service:
+                        service: notify.mobile_app_lukas_x
+                        data:
+                          message: 'Dávka pH minus'
             - switch.turn_off: cerpadlo_ph_minus_switch
   
   - platform: template
@@ -327,7 +346,7 @@ interval:
             - switch.is_off: cerpadlo_ph_minus_switch
           then:
             - switch.toggle: cerpadlo_chlor_switch
-  - interval: 20min
+  - interval: 10min
     then:
         if:
           condition:
@@ -359,23 +378,23 @@ stepper:
     id: cerpadlo_chlor
     step_pin: GPIO26
     dir_pin: GPIO18
-    max_speed: 250 steps/s
+    max_speed: 300 steps/s
     sleep_pin:
      number: GPIO22
      inverted: True
-    acceleration: inf
-    deceleration: inf
+    acceleration: 150
+    deceleration: 150
 
   - platform: a4988
     id: cerpadlo_ph_minus
     step_pin: GPIO27
     dir_pin: GPIO25
-    max_speed: 500 steps/s
+    max_speed: 300 steps/s
     sleep_pin:
      number: GPIO32
      inverted: True
-    acceleration: inf
-    deceleration: inf
+    acceleration: 150
+    deceleration: 150
 
 #light:
 #  - platform: monochromatic
