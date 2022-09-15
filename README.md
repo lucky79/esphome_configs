@@ -16,6 +16,6 @@ SR-04T for water level in a water tank<br>
 
 Switching low voltage only with UniPi relays, controls big 230V 16A power relays. This HW was left over from previous unfinished project which I converted to ESPHome. The same for Tentacle T3. You can replace these with EZO boards and use different relay board<br>
 
-All automations happen on the ESP itself, the only thing you need is input helpers to be able to control pH and ORP. Then just add all sensors and switches from the ESP to your dashboard as you wish.<br>
+All automations happen on the ESP itself, the only thing you need in HA are input helpers to be able to control pH and ORP. Then just add all sensors and switches from the ESP to your dashboard as you wish.<br>
 
 
